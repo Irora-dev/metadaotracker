@@ -4,67 +4,43 @@ const RANGER_WALLET = "9ApaAe39Z8GEXfqm7F7HL545N4J4tN7RhF8FhS88pRNp";
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const SALE_END_TIME = new Date("2026-01-10T16:00:00Z");
 
-// Historical patterns with time-based snapshots
+// Historical patterns with known data at 5.5h before end
 const HISTORICAL_PATTERNS = {
   'Umbra': {
     final: 155194912,
     sale_date: '2025-10-10',
     order: 1,
-    snapshots: {
-      6.0: 38000000, 5.5: 44220255, 5.0: 51000000, 4.5: 59000000,
-      4.0: 68000000, 3.5: 78000000, 3.0: 89000000, 2.5: 102000000,
-      2.0: 115000000, 1.5: 128000000, 1.0: 140000000, 0.5: 150000000
-    }
+    pct_at_5_5h: 28.5
   },
   'Avici': {
     final: 34233177,
     sale_date: '2025-10-18',
     order: 2,
-    snapshots: {
-      6.0: 6800000, 5.5: 8036796, 5.0: 9500000, 4.5: 11200000,
-      4.0: 13200000, 3.5: 15500000, 3.0: 18200000, 2.5: 21500000,
-      2.0: 25000000, 1.5: 28500000, 1.0: 31500000, 0.5: 33500000
-    }
+    pct_at_5_5h: 23.5
   },
   'Loyal': {
     final: 75898234,
     sale_date: '2025-10-22',
     order: 3,
-    snapshots: {
-      6.0: 13500000, 5.5: 16437386, 5.0: 20000000, 4.5: 24500000,
-      4.0: 30000000, 3.5: 36500000, 3.0: 44000000, 2.5: 52000000,
-      2.0: 60000000, 1.5: 67000000, 1.0: 72000000, 0.5: 75000000
-    }
+    pct_at_5_5h: 21.7
   },
   'zkSOL': {
     final: 14886360,
     sale_date: '2025-10-24',
     order: 4,
-    snapshots: {
-      6.0: 2000000, 5.5: 2427947, 5.0: 3000000, 4.5: 3800000,
-      4.0: 4800000, 3.5: 6000000, 3.0: 7500000, 2.5: 9200000,
-      2.0: 11000000, 1.5: 12800000, 1.0: 14000000, 0.5: 14700000
-    }
+    pct_at_5_5h: 16.3
   },
   'Paystream': {
     final: 6149247,
     sale_date: '2025-10-27',
     order: 5,
-    snapshots: {
-      6.0: 1100000, 5.5: 1319085, 5.0: 1600000, 4.5: 2000000,
-      4.0: 2500000, 3.5: 3100000, 3.0: 3800000, 2.5: 4500000,
-      2.0: 5100000, 1.5: 5600000, 1.0: 5900000, 0.5: 6100000
-    }
+    pct_at_5_5h: 21.5
   },
   'Solomon': {
     final: 102932688,
     sale_date: '2025-11-18',
     order: 6,
-    snapshots: {
-      6.0: 9500000, 5.5: 11779124, 5.0: 15000000, 4.5: 19500000,
-      4.0: 26000000, 3.5: 35000000, 3.0: 46000000, 2.5: 58000000,
-      2.0: 70000000, 1.5: 82000000, 1.0: 92000000, 0.5: 100000000
-    }
+    pct_at_5_5h: 11.4
   }
 };
 
@@ -178,35 +154,46 @@ async function getPolymarketOdds() {
   return odds;
 }
 
-function getHistoricalAtTime(hoursRemaining) {
-  const lookupTime = Math.round(hoursRemaining * 2) / 2;
-  const clampedTime = Math.max(0.5, Math.min(6.0, lookupTime));
+function estimatePctAtTime(pctAt5_5h, hoursRemaining) {
+  if (hoursRemaining >= 5.5) return pctAt5_5h;
+  if (hoursRemaining <= 0) return 100;
 
+  // Higher exp = more back-loaded surge
+  const expFactor = pctAt5_5h < 15 ? 2.5 : pctAt5_5h < 25 ? 2.0 : 1.5;
+
+  const remainingPct = 100 - pctAt5_5h;
+  const timeElapsed = 5.5 - hoursRemaining;
+  const timeRatio = timeElapsed / 5.5;
+  const progress = Math.pow(timeRatio, expFactor);
+
+  return pctAt5_5h + remainingPct * progress;
+}
+
+function getHistoricalAtTime(hoursRemaining) {
   const snapshots = [];
   for (const [name, data] of Object.entries(HISTORICAL_PATTERNS)) {
-    const snapshotValue = data.snapshots[clampedTime];
-    if (snapshotValue) {
-      snapshots.push({
-        name,
-        amount: snapshotValue,
-        final: data.final,
-        pct_of_final: Math.round(snapshotValue / data.final * 1000) / 10,
-        sale_date: data.sale_date,
-        order: data.order
-      });
-    }
+    const pctAt5_5h = data.pct_at_5_5h || 20;
+    const estimatedPct = estimatePctAtTime(pctAt5_5h, hoursRemaining);
+    const estimatedAmount = data.final * estimatedPct / 100;
+
+    snapshots.push({
+      name,
+      amount: Math.round(estimatedAmount),
+      final: data.final,
+      pct_of_final: Math.round(estimatedPct * 10) / 10,
+      sale_date: data.sale_date,
+      order: data.order
+    });
   }
   return snapshots.sort((a, b) => a.order - b.order);
 }
 
 function calculateProjections(balance, hoursRemaining) {
-  const lookupTime = Math.round(hoursRemaining * 2) / 2;
-  const clampedTime = Math.max(0.5, Math.min(6.0, lookupTime));
-
   const projections = [];
   for (const [name, data] of Object.entries(HISTORICAL_PATTERNS)) {
-    const snapshotAtTime = data.snapshots[clampedTime] || data.snapshots[5.5];
-    const mult = snapshotAtTime ? data.final / snapshotAtTime : 1;
+    const pctAt5_5h = data.pct_at_5_5h || 20;
+    const estimatedPct = estimatePctAtTime(pctAt5_5h, hoursRemaining);
+    const mult = estimatedPct > 0 ? 100 / estimatedPct : 1;
     const projected = balance * mult;
 
     projections.push({
@@ -217,7 +204,8 @@ function calculateProjections(balance, hoursRemaining) {
       sale_date: data.sale_date || '',
       order: data.order || 0,
       final_raised: data.final,
-      snapshot_used: snapshotAtTime
+      pct_at_5_5h: pctAt5_5h,
+      estimated_pct_now: Math.round(estimatedPct * 10) / 10
     });
   }
   return projections.sort((a, b) => a.projected - b.projected);
