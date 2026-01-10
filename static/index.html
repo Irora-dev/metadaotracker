@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranger Finance Raise Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-red: #DC2626;
+            --dark-red: #991B1B;
+            --light-red: #FEE2E2;
+            --accent-red: #EF4444;
+            --white: #FFFFFF;
+            --off-white: #F9FAFB;
+            --gray-100: #F3F4F6;
+            --gray-200: #E5E7EB;
+            --gray-300: #D1D5DB;
+            --gray-600: #4B5563;
+            --gray-800: #1F2937;
+            --green: #10B981;
+            --yellow: #F59E0B;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--off-white);
+            color: var(--gray-800);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-red), var(--dark-red));
+            color: var(--white);
+            padding: 1.5rem 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .header .subtitle {
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--white);
+            border-radius: 12px;
+            padding: 1.25rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid var(--primary-red);
+        }
+
+        .stat-card.highlight {
+            background: linear-gradient(135deg, var(--primary-red), var(--dark-red));
+            color: var(--white);
+            border-left: none;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            opacity: 0.7;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+        }
+
+        .stat-card.highlight .stat-value {
+            font-size: 2rem;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (max-width: 900px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--white);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--gray-800);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-title::before {
+            content: '';
+            width: 4px;
+            height: 1rem;
+            background: var(--primary-red);
+            border-radius: 2px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 250px;
+        }
+
+        .threshold-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .threshold-table th,
+        .threshold-table td {
+            padding: 0.6rem 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--gray-200);
+            font-size: 0.875rem;
+        }
+
+        .threshold-table th {
+            font-weight: 600;
+            color: var(--gray-600);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .threshold-table tr:hover {
+            background: var(--gray-100);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-yes {
+            background: #DCFCE7;
+            color: #166534;
+        }
+
+        .badge-no {
+            background: #FEE2E2;
+            color: #991B1B;
+        }
+
+        .badge-fair {
+            background: var(--gray-200);
+            color: var(--gray-600);
+        }
+
+        .prob-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--gray-200);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .prob-bar-fill {
+            height: 100%;
+            background: var(--primary-red);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .prob-bar-fill.polymarket {
+            background: #6366F1;
+        }
+
+        .projections-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .projection-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: var(--gray-100);
+            border-radius: 8px;
+        }
+
+        .projection-name {
+            font-weight: 500;
+        }
+
+        .projection-value {
+            font-weight: 700;
+            color: var(--primary-red);
+        }
+
+        .projection-mult {
+            font-size: 0.75rem;
+            color: var(--gray-600);
+        }
+
+        .countdown {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 0.5rem;
+        }
+
+        .countdown-item {
+            text-align: center;
+        }
+
+        .countdown-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .countdown-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        .refresh-indicator {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            background: var(--white);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            font-size: 0.75rem;
+            color: var(--gray-600);
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            color: var(--gray-600);
+        }
+
+        .legend {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            margin-top: 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }
+
+        .legend-dot.model {
+            background: var(--primary-red);
+        }
+
+        .legend-dot.polymarket {
+            background: #6366F1;
+        }
+
+        .value-highlight {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Ranger Finance Raise Tracker</h1>
+        <p class="subtitle">Live MetaDAO Public Sale Analysis</p>
+    </div>
+
+    <div class="container">
+        <div class="stats-grid" id="stats-grid">
+            <div class="stat-card highlight">
+                <div class="stat-label">Current Raised</div>
+                <div class="stat-value" id="balance">Loading...</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Time Remaining</div>
+                <div class="stat-value" id="time-remaining">--:--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Transactions</div>
+                <div class="stat-value" id="tx-count">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Projected Range</div>
+                <div class="stat-value" id="projection-range">--</div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-title">Hourly Activity</div>
+                <div class="chart-container">
+                    <canvas id="activityChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">Projections by Pattern</div>
+                <div class="projections-list" id="projections-list">
+                    <div class="loading">Loading projections...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 1.5rem;">
+            <div class="card-title">Probability Comparison: Model vs Polymarket</div>
+            <div class="chart-container" style="height: 300px;">
+                <canvas id="probChart"></canvas>
+            </div>
+            <div class="legend">
+                <div class="legend-item"><div class="legend-dot model"></div> Model Estimate</div>
+                <div class="legend-item"><div class="legend-dot polymarket"></div> Polymarket Odds</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Value Opportunities</div>
+            <table class="threshold-table">
+                <thead>
+                    <tr>
+                        <th>Threshold</th>
+                        <th>Model</th>
+                        <th style="width: 120px;">Model Bar</th>
+                        <th>Polymarket</th>
+                        <th style="width: 120px;">PM Bar</th>
+                        <th>Difference</th>
+                        <th>Signal</th>
+                    </tr>
+                </thead>
+                <tbody id="opportunities-table">
+                    <tr><td colspan="7" class="loading">Loading data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="refresh-indicator" id="refresh-indicator">
+        Refreshing in <span id="refresh-countdown">30</span>s
+    </div>
+
+    <script>
+        let activityChart = null;
+        let probChart = null;
+        let refreshInterval = 30;
+        let countdownValue = refreshInterval;
+
+        function formatCurrency(value) {
+            if (value >= 1000000) {
+                return '$' + (value / 1000000).toFixed(2) + 'M';
+            }
+            return '$' + value.toLocaleString();
+        }
+
+        function formatTime(hours) {
+            const h = Math.floor(hours);
+            const m = Math.floor((hours - h) * 60);
+            return `${h}h ${m}m`;
+        }
+
+        function updateDashboard(data) {
+            // Update stats
+            document.getElementById('balance').textContent = formatCurrency(data.balance);
+            document.getElementById('time-remaining').textContent = formatTime(data.hours_remaining);
+            document.getElementById('tx-count').textContent = data.transactions.toLocaleString();
+
+            // Projection range
+            const projections = data.projections;
+            const minProj = projections[0].projected;
+            const maxProj = projections[projections.length - 1].projected;
+            document.getElementById('projection-range').textContent =
+                `${formatCurrency(minProj)} - ${formatCurrency(maxProj)}`;
+
+            // Update projections list
+            const projList = document.getElementById('projections-list');
+            projList.innerHTML = projections.map(p => `
+                <div class="projection-item">
+                    <div>
+                        <div class="projection-name">${p.name}</div>
+                        <div class="projection-mult">${p.multiplier}x multiplier • ${(p.weight * 100).toFixed(0)}% weight</div>
+                    </div>
+                    <div class="projection-value">${formatCurrency(p.projected)}</div>
+                </div>
+            `).join('');
+
+            // Update activity chart
+            updateActivityChart(data.hourly_activity);
+
+            // Update probability chart
+            updateProbChart(data.model_probabilities, data.polymarket_odds);
+
+            // Update opportunities table
+            updateOpportunitiesTable(data.model_probabilities, data.polymarket_odds, data.opportunities);
+        }
+
+        function updateActivityChart(hourlyData) {
+            const ctx = document.getElementById('activityChart').getContext('2d');
+
+            const labels = hourlyData.map(d => d.hour);
+            const values = hourlyData.map(d => d.transactions);
+
+            if (activityChart) {
+                activityChart.data.labels = labels;
+                activityChart.data.datasets[0].data = values;
+                activityChart.update();
+            } else {
+                activityChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Transactions',
+                            data: values,
+                            backgroundColor: '#DC2626',
+                            borderRadius: 4,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: { beginAtZero: true },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+            }
+        }
+
+        function updateProbChart(modelProbs, polymarketOdds) {
+            const ctx = document.getElementById('probChart').getContext('2d');
+
+            const thresholds = [50, 60, 70, 80, 90, 100, 120, 140, 160];
+            const labels = thresholds.map(t => `>$${t}M`);
+            const modelData = thresholds.map(t => modelProbs[t] || 0);
+            const pmData = thresholds.map(t => polymarketOdds[t] || 0);
+
+            if (probChart) {
+                probChart.data.datasets[0].data = modelData;
+                probChart.data.datasets[1].data = pmData;
+                probChart.update();
+            } else {
+                probChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Model Estimate',
+                                data: modelData,
+                                backgroundColor: '#DC2626',
+                                borderRadius: 4,
+                            },
+                            {
+                                label: 'Polymarket',
+                                data: pmData,
+                                backgroundColor: '#6366F1',
+                                borderRadius: 4,
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                ticks: { callback: v => v + '%' }
+                            },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+            }
+        }
+
+        function updateOpportunitiesTable(modelProbs, polymarketOdds, opportunities) {
+            const tbody = document.getElementById('opportunities-table');
+            const thresholds = [15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200];
+
+            tbody.innerHTML = thresholds.map(t => {
+                const model = modelProbs[t] || 0;
+                const pm = polymarketOdds[t] || 0;
+                const diff = model - pm;
+                const opp = opportunities[t] || { action: 'FAIR', edge: 0 };
+
+                let badgeClass = 'badge-fair';
+                let signal = 'FAIR';
+                if (opp.action === 'BUY YES') {
+                    badgeClass = 'badge-yes';
+                    signal = `YES +${opp.edge}%`;
+                } else if (opp.action === 'BUY NO') {
+                    badgeClass = 'badge-no';
+                    signal = `NO +${opp.edge}%`;
+                }
+
+                const isValue = Math.abs(diff) >= 10;
+
+                return `
+                    <tr class="${isValue ? 'value-highlight' : ''}">
+                        <td><strong>>$${t}M</strong></td>
+                        <td>${model.toFixed(0)}%</td>
+                        <td><div class="prob-bar"><div class="prob-bar-fill" style="width: ${model}%"></div></div></td>
+                        <td>${pm.toFixed(0)}%</td>
+                        <td><div class="prob-bar"><div class="prob-bar-fill polymarket" style="width: ${pm}%"></div></div></td>
+                        <td style="color: ${diff > 0 ? '#10B981' : diff < 0 ? '#DC2626' : 'inherit'}">
+                            ${diff > 0 ? '+' : ''}${diff.toFixed(0)}%
+                        </td>
+                        <td><span class="badge ${badgeClass}">${signal}</span></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/data');
+                const data = await response.json();
+
+                if (data.error) {
+                    console.error('API Error:', data.error);
+                    return;
+                }
+
+                updateDashboard(data);
+
+                if (data.sale_ended) {
+                    document.getElementById('refresh-indicator').textContent = 'Sale Ended';
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+            }
+        }
+
+        function updateCountdown() {
+            countdownValue--;
+            document.getElementById('refresh-countdown').textContent = countdownValue;
+
+            if (countdownValue <= 0) {
+                countdownValue = refreshInterval;
+                fetchData();
+            }
+        }
+
+        // Initial load
+        fetchData();
+
+        // Auto-refresh
+        setInterval(updateCountdown, 1000);
+    </script>
+</body>
+</html>

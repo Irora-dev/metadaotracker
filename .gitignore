@@ -1,0 +1,22 @@
+# Logs
+*.log
+*.jsonl
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+.env
+
+# OS
+.DS_Store
+*.swp
+
+# PID files
+*.pid
+
+# IDE
+.vscode/
+.idea/
