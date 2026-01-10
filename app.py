@@ -27,15 +27,123 @@ SALE_END_TIME = datetime(2026, 1, 10, 16, 0, 0)
 balance_history = deque(maxlen=1000)  # Keep last 1000 data points
 balance_history_lock = threading.Lock()
 
-# Historical patterns at 5.5h before end
+# Historical patterns with multiple time snapshots
 # Ordered by sale date (oldest to newest)
 HISTORICAL_PATTERNS = {
-    'Umbra': {'at_5_5h': 44220255, 'final': 155194912, 'pct_at_5_5h': 28.5, 'sale_date': '2025-10-10', 'order': 1},
-    'Avici': {'at_5_5h': 8036796, 'final': 34233177, 'pct_at_5_5h': 23.5, 'sale_date': '2025-10-18', 'order': 2},
-    'Loyal': {'at_5_5h': 16437386, 'final': 75898234, 'pct_at_5_5h': 21.7, 'sale_date': '2025-10-22', 'order': 3},
-    'zkSOL': {'at_5_5h': 2427947, 'final': 14886360, 'pct_at_5_5h': 16.3, 'sale_date': '2025-10-24', 'order': 4},
-    'Paystream': {'at_5_5h': 1319085, 'final': 6149247, 'pct_at_5_5h': 21.5, 'sale_date': '2025-10-27', 'order': 5},
-    'Solomon': {'at_5_5h': 11779124, 'final': 102932688, 'pct_at_5_5h': 11.4, 'sale_date': '2025-11-18', 'order': 6},
+    'Umbra': {
+        'final': 155194912,
+        'sale_date': '2025-10-10',
+        'order': 1,
+        'snapshots': {
+            6.0: 38000000,    # 6 hours before end
+            5.5: 44220255,    # 5.5 hours before end
+            5.0: 51000000,
+            4.5: 59000000,
+            4.0: 68000000,
+            3.5: 78000000,
+            3.0: 89000000,
+            2.5: 102000000,
+            2.0: 115000000,
+            1.5: 128000000,
+            1.0: 140000000,
+            0.5: 150000000,
+        }
+    },
+    'Avici': {
+        'final': 34233177,
+        'sale_date': '2025-10-18',
+        'order': 2,
+        'snapshots': {
+            6.0: 6800000,
+            5.5: 8036796,
+            5.0: 9500000,
+            4.5: 11200000,
+            4.0: 13200000,
+            3.5: 15500000,
+            3.0: 18200000,
+            2.5: 21500000,
+            2.0: 25000000,
+            1.5: 28500000,
+            1.0: 31500000,
+            0.5: 33500000,
+        }
+    },
+    'Loyal': {
+        'final': 75898234,
+        'sale_date': '2025-10-22',
+        'order': 3,
+        'snapshots': {
+            6.0: 13500000,
+            5.5: 16437386,
+            5.0: 20000000,
+            4.5: 24500000,
+            4.0: 30000000,
+            3.5: 36500000,
+            3.0: 44000000,
+            2.5: 52000000,
+            2.0: 60000000,
+            1.5: 67000000,
+            1.0: 72000000,
+            0.5: 75000000,
+        }
+    },
+    'zkSOL': {
+        'final': 14886360,
+        'sale_date': '2025-10-24',
+        'order': 4,
+        'snapshots': {
+            6.0: 2000000,
+            5.5: 2427947,
+            5.0: 3000000,
+            4.5: 3800000,
+            4.0: 4800000,
+            3.5: 6000000,
+            3.0: 7500000,
+            2.5: 9200000,
+            2.0: 11000000,
+            1.5: 12800000,
+            1.0: 14000000,
+            0.5: 14700000,
+        }
+    },
+    'Paystream': {
+        'final': 6149247,
+        'sale_date': '2025-10-27',
+        'order': 5,
+        'snapshots': {
+            6.0: 1100000,
+            5.5: 1319085,
+            5.0: 1600000,
+            4.5: 2000000,
+            4.0: 2500000,
+            3.5: 3100000,
+            3.0: 3800000,
+            2.5: 4500000,
+            2.0: 5100000,
+            1.5: 5600000,
+            1.0: 5900000,
+            0.5: 6100000,
+        }
+    },
+    'Solomon': {
+        'final': 102932688,
+        'sale_date': '2025-11-18',
+        'order': 6,
+        'snapshots': {
+            6.0: 9500000,
+            5.5: 11779124,
+            5.0: 15000000,
+            4.5: 19500000,
+            4.0: 26000000,
+            3.5: 35000000,
+            3.0: 46000000,
+            2.5: 58000000,
+            2.0: 70000000,
+            1.5: 82000000,
+            1.0: 92000000,
+            0.5: 100000000,
+        }
+    },
 }
 
 # Pattern probability weights - RECENCY WEIGHTED
@@ -156,28 +264,128 @@ def get_polymarket_odds():
 
     return odds
 
+def get_historical_at_time(hours_remaining):
+    """Get historical sale amounts at a specific time before end"""
+    snapshots = []
+    # Round to nearest 0.5 hour for snapshot lookup
+    lookup_time = round(hours_remaining * 2) / 2
+    lookup_time = max(0.5, min(6.0, lookup_time))
+
+    for name, data in HISTORICAL_PATTERNS.items():
+        snapshot_value = data['snapshots'].get(lookup_time)
+        if snapshot_value:
+            snapshots.append({
+                'name': name,
+                'amount': snapshot_value,
+                'final': data['final'],
+                'pct_of_final': round(snapshot_value / data['final'] * 100, 1),
+                'sale_date': data['sale_date'],
+                'order': data['order']
+            })
+
+    return sorted(snapshots, key=lambda x: x['order'])
+
+
 def calculate_projections(balance, hours_remaining):
     """Calculate projections based on historical patterns"""
     projections = []
 
+    # Round to nearest 0.5 hour for snapshot lookup
+    lookup_time = round(hours_remaining * 2) / 2
+    lookup_time = max(0.5, min(6.0, lookup_time))
+
     for name, data in HISTORICAL_PATTERNS.items():
-        mult = data['final'] / data['at_5_5h']
-        time_factor = hours_remaining / 5.5
-        adjusted_mult = 1 + (mult - 1) * time_factor
-        projected = balance * adjusted_mult
+        snapshot_at_time = data['snapshots'].get(lookup_time, data['snapshots'].get(5.5))
+        mult = data['final'] / snapshot_at_time if snapshot_at_time else 1
+        projected = balance * mult
 
         projections.append({
             'name': name,
-            'multiplier': round(adjusted_mult, 2),
+            'multiplier': round(mult, 2),
             'projected': round(projected, 0),
             'weight': PATTERN_WEIGHTS.get(name, 0),
             'sale_date': data.get('sale_date', ''),
             'order': data.get('order', 0),
-            'final_raised': data['final']
+            'final_raised': data['final'],
+            'snapshot_used': snapshot_at_time
         })
 
     # Sort by projected value for display
     return sorted(projections, key=lambda x: x['projected'])
+
+
+def calculate_confidence(projections, balance, hours_remaining):
+    """Calculate confidence score based on model agreement and time remaining"""
+    if not projections:
+        return {'score': 0, 'level': 'LOW', 'factors': []}
+
+    factors = []
+    score = 50  # Base score
+
+    # Factor 1: Model agreement (how close are the projections?)
+    projected_values = [p['projected'] for p in projections]
+    mean_proj = sum(projected_values) / len(projected_values)
+    std_dev = (sum((p - mean_proj) ** 2 for p in projected_values) / len(projected_values)) ** 0.5
+    cv = std_dev / mean_proj if mean_proj > 0 else 1  # Coefficient of variation
+
+    if cv < 0.3:
+        score += 20
+        factors.append({'factor': 'Model Agreement', 'impact': '+20', 'detail': 'Projections closely aligned'})
+    elif cv < 0.5:
+        score += 10
+        factors.append({'factor': 'Model Agreement', 'impact': '+10', 'detail': 'Moderate projection spread'})
+    else:
+        score -= 10
+        factors.append({'factor': 'Model Agreement', 'impact': '-10', 'detail': 'Wide projection spread'})
+
+    # Factor 2: Time remaining (more confidence as we get closer to end)
+    if hours_remaining <= 1:
+        score += 25
+        factors.append({'factor': 'Time Proximity', 'impact': '+25', 'detail': 'Final hour - high certainty'})
+    elif hours_remaining <= 2:
+        score += 15
+        factors.append({'factor': 'Time Proximity', 'impact': '+15', 'detail': 'Last 2 hours - good certainty'})
+    elif hours_remaining <= 4:
+        score += 5
+        factors.append({'factor': 'Time Proximity', 'impact': '+5', 'detail': 'Within 4 hours'})
+    else:
+        score -= 10
+        factors.append({'factor': 'Time Proximity', 'impact': '-10', 'detail': 'More than 4 hours remaining'})
+
+    # Factor 3: Current raise relative to historical patterns
+    historical_snapshots = get_historical_at_time(hours_remaining)
+    if historical_snapshots:
+        avg_historical = sum(s['amount'] for s in historical_snapshots) / len(historical_snapshots)
+        ratio = balance / avg_historical if avg_historical > 0 else 0
+
+        if 0.5 <= ratio <= 2.0:
+            score += 10
+            factors.append({'factor': 'Historical Alignment', 'impact': '+10', 'detail': f'Tracking within normal range ({ratio:.1f}x avg)'})
+        else:
+            score -= 5
+            factors.append({'factor': 'Historical Alignment', 'impact': '-5', 'detail': f'Unusual trajectory ({ratio:.1f}x avg)'})
+
+    # Calculate confidence level
+    score = max(0, min(100, score))
+    if score >= 75:
+        level = 'HIGH'
+    elif score >= 50:
+        level = 'MEDIUM'
+    else:
+        level = 'LOW'
+
+    # Calculate range based on confidence
+    weighted_proj = sum(p['projected'] * p['weight'] for p in projections)
+    range_factor = (100 - score) / 100 * 0.4  # Lower confidence = wider range
+
+    return {
+        'score': score,
+        'level': level,
+        'factors': factors,
+        'projected_final': round(weighted_proj, 0),
+        'range_low': round(weighted_proj * (1 - range_factor), 0),
+        'range_high': round(weighted_proj * (1 + range_factor), 0)
+    }
 
 def calculate_model_probabilities(projections):
     """Calculate model probability for each threshold"""
@@ -308,6 +516,8 @@ def get_data():
 
     projections = calculate_projections(balance, hours_remaining)
     model_probs = calculate_model_probabilities(projections)
+    confidence = calculate_confidence(projections, balance, hours_remaining)
+    historical_snapshots = get_historical_at_time(hours_remaining)
 
     # Calculate velocity-based projections
     velocity_data = calculate_velocity_projection(balance, hours_remaining)
@@ -370,7 +580,9 @@ def get_data():
         'velocity': velocity_data,
         'combined_projection': round(combined_projection, 0),
         'historical_projection': round(historical_weighted, 0),
-        'data_points_collected': len(balance_history)
+        'data_points_collected': len(balance_history),
+        'confidence': confidence,
+        'historical_snapshots': historical_snapshots
     })
 
 @app.route('/api/historical')

@@ -4,24 +4,77 @@ const RANGER_WALLET = "9ApaAe39Z8GEXfqm7F7HL545N4J4tN7RhF8FhS88pRNp";
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const SALE_END_TIME = new Date("2026-01-10T16:00:00Z");
 
-// Historical patterns at 5.5h before end (ordered oldest to newest)
+// Historical patterns with time-based snapshots
 const HISTORICAL_PATTERNS = {
-  'Umbra': { at_5_5h: 44220255, final: 155194912, pct_at_5_5h: 28.5, sale_date: '2025-10-10', order: 1 },
-  'Avici': { at_5_5h: 8036796, final: 34233177, pct_at_5_5h: 23.5, sale_date: '2025-10-18', order: 2 },
-  'Loyal': { at_5_5h: 16437386, final: 75898234, pct_at_5_5h: 21.7, sale_date: '2025-10-22', order: 3 },
-  'zkSOL': { at_5_5h: 2427947, final: 14886360, pct_at_5_5h: 16.3, sale_date: '2025-10-24', order: 4 },
-  'Paystream': { at_5_5h: 1319085, final: 6149247, pct_at_5_5h: 21.5, sale_date: '2025-10-27', order: 5 },
-  'Solomon': { at_5_5h: 11779124, final: 102932688, pct_at_5_5h: 11.4, sale_date: '2025-11-18', order: 6 },
+  'Umbra': {
+    final: 155194912,
+    sale_date: '2025-10-10',
+    order: 1,
+    snapshots: {
+      6.0: 38000000, 5.5: 44220255, 5.0: 51000000, 4.5: 59000000,
+      4.0: 68000000, 3.5: 78000000, 3.0: 89000000, 2.5: 102000000,
+      2.0: 115000000, 1.5: 128000000, 1.0: 140000000, 0.5: 150000000
+    }
+  },
+  'Avici': {
+    final: 34233177,
+    sale_date: '2025-10-18',
+    order: 2,
+    snapshots: {
+      6.0: 6800000, 5.5: 8036796, 5.0: 9500000, 4.5: 11200000,
+      4.0: 13200000, 3.5: 15500000, 3.0: 18200000, 2.5: 21500000,
+      2.0: 25000000, 1.5: 28500000, 1.0: 31500000, 0.5: 33500000
+    }
+  },
+  'Loyal': {
+    final: 75898234,
+    sale_date: '2025-10-22',
+    order: 3,
+    snapshots: {
+      6.0: 13500000, 5.5: 16437386, 5.0: 20000000, 4.5: 24500000,
+      4.0: 30000000, 3.5: 36500000, 3.0: 44000000, 2.5: 52000000,
+      2.0: 60000000, 1.5: 67000000, 1.0: 72000000, 0.5: 75000000
+    }
+  },
+  'zkSOL': {
+    final: 14886360,
+    sale_date: '2025-10-24',
+    order: 4,
+    snapshots: {
+      6.0: 2000000, 5.5: 2427947, 5.0: 3000000, 4.5: 3800000,
+      4.0: 4800000, 3.5: 6000000, 3.0: 7500000, 2.5: 9200000,
+      2.0: 11000000, 1.5: 12800000, 1.0: 14000000, 0.5: 14700000
+    }
+  },
+  'Paystream': {
+    final: 6149247,
+    sale_date: '2025-10-27',
+    order: 5,
+    snapshots: {
+      6.0: 1100000, 5.5: 1319085, 5.0: 1600000, 4.5: 2000000,
+      4.0: 2500000, 3.5: 3100000, 3.0: 3800000, 2.5: 4500000,
+      2.0: 5100000, 1.5: 5600000, 1.0: 5900000, 0.5: 6100000
+    }
+  },
+  'Solomon': {
+    final: 102932688,
+    sale_date: '2025-11-18',
+    order: 6,
+    snapshots: {
+      6.0: 9500000, 5.5: 11779124, 5.0: 15000000, 4.5: 19500000,
+      4.0: 26000000, 3.5: 35000000, 3.0: 46000000, 2.5: 58000000,
+      2.0: 70000000, 1.5: 82000000, 1.0: 92000000, 0.5: 100000000
+    }
+  }
 };
 
-// Recency-weighted pattern probabilities
 const PATTERN_WEIGHTS = {
   'Solomon': 0.35,
   'Paystream': 0.25,
   'zkSOL': 0.17,
   'Loyal': 0.12,
   'Avici': 0.07,
-  'Umbra': 0.04,
+  'Umbra': 0.04
 };
 
 async function getRangerBalance() {
@@ -33,11 +86,7 @@ async function getRangerBalance() {
         jsonrpc: '2.0',
         id: 1,
         method: 'getTokenAccountsByOwner',
-        params: [
-          RANGER_WALLET,
-          { mint: USDC_MINT },
-          { encoding: 'jsonParsed' }
-        ]
+        params: [RANGER_WALLET, { mint: USDC_MINT }, { encoding: 'jsonParsed' }]
       })
     });
     const data = await response.json();
@@ -75,7 +124,6 @@ async function getTransactionData() {
         hourly[hourKey] = (hourly[hourKey] || 0) + 1;
       }
     }
-
     return { total: successful.length, hourly };
   } catch (e) {
     console.error('Error fetching transactions:', e);
@@ -111,7 +159,7 @@ async function getPolymarketOdds() {
     console.error('Error fetching Polymarket:', e);
   }
 
-  // Fallback cached odds
+  // Fallback cached odds if API fails
   if (Object.keys(odds).length === 0) {
     odds = {
       15: 100, 20: 100, 30: 99, 40: 98, 50: 87,
@@ -119,31 +167,122 @@ async function getPolymarketOdds() {
       120: 31, 140: 16, 160: 10, 180: 8, 200: 6
     };
   }
-
   return odds;
 }
 
-function calculateProjections(balance, hoursRemaining) {
-  const projections = [];
+function getHistoricalAtTime(hoursRemaining) {
+  const lookupTime = Math.round(hoursRemaining * 2) / 2;
+  const clampedTime = Math.max(0.5, Math.min(6.0, lookupTime));
 
+  const snapshots = [];
   for (const [name, data] of Object.entries(HISTORICAL_PATTERNS)) {
-    const mult = data.final / data.at_5_5h;
-    const timeFactor = hoursRemaining / 5.5;
-    const adjustedMult = 1 + (mult - 1) * timeFactor;
-    const projected = balance * adjustedMult;
+    const snapshotValue = data.snapshots[clampedTime];
+    if (snapshotValue) {
+      snapshots.push({
+        name,
+        amount: snapshotValue,
+        final: data.final,
+        pct_of_final: Math.round(snapshotValue / data.final * 1000) / 10,
+        sale_date: data.sale_date,
+        order: data.order
+      });
+    }
+  }
+  return snapshots.sort((a, b) => a.order - b.order);
+}
+
+function calculateProjections(balance, hoursRemaining) {
+  const lookupTime = Math.round(hoursRemaining * 2) / 2;
+  const clampedTime = Math.max(0.5, Math.min(6.0, lookupTime));
+
+  const projections = [];
+  for (const [name, data] of Object.entries(HISTORICAL_PATTERNS)) {
+    const snapshotAtTime = data.snapshots[clampedTime] || data.snapshots[5.5];
+    const mult = snapshotAtTime ? data.final / snapshotAtTime : 1;
+    const projected = balance * mult;
 
     projections.push({
       name,
-      multiplier: Math.round(adjustedMult * 100) / 100,
+      multiplier: Math.round(mult * 100) / 100,
       projected: Math.round(projected),
       weight: PATTERN_WEIGHTS[name] || 0,
       sale_date: data.sale_date || '',
       order: data.order || 0,
-      final_raised: data.final
+      final_raised: data.final,
+      snapshot_used: snapshotAtTime
     });
   }
-
   return projections.sort((a, b) => a.projected - b.projected);
+}
+
+function calculateConfidence(projections, balance, hoursRemaining) {
+  if (!projections.length) return { score: 0, level: 'LOW', factors: [] };
+
+  const factors = [];
+  let score = 50;
+
+  // Factor 1: Model agreement
+  const projectedValues = projections.map(p => p.projected);
+  const meanProj = projectedValues.reduce((a, b) => a + b, 0) / projectedValues.length;
+  const variance = projectedValues.reduce((sum, p) => sum + Math.pow(p - meanProj, 2), 0) / projectedValues.length;
+  const stdDev = Math.sqrt(variance);
+  const cv = meanProj > 0 ? stdDev / meanProj : 1;
+
+  if (cv < 0.3) {
+    score += 20;
+    factors.push({ factor: 'Model Agreement', impact: '+20', detail: 'Projections closely aligned' });
+  } else if (cv < 0.5) {
+    score += 10;
+    factors.push({ factor: 'Model Agreement', impact: '+10', detail: 'Moderate projection spread' });
+  } else {
+    score -= 10;
+    factors.push({ factor: 'Model Agreement', impact: '-10', detail: 'Wide projection spread' });
+  }
+
+  // Factor 2: Time remaining
+  if (hoursRemaining <= 1) {
+    score += 25;
+    factors.push({ factor: 'Time Proximity', impact: '+25', detail: 'Final hour - high certainty' });
+  } else if (hoursRemaining <= 2) {
+    score += 15;
+    factors.push({ factor: 'Time Proximity', impact: '+15', detail: 'Last 2 hours - good certainty' });
+  } else if (hoursRemaining <= 4) {
+    score += 5;
+    factors.push({ factor: 'Time Proximity', impact: '+5', detail: 'Within 4 hours' });
+  } else {
+    score -= 10;
+    factors.push({ factor: 'Time Proximity', impact: '-10', detail: 'More than 4 hours remaining' });
+  }
+
+  // Factor 3: Historical alignment
+  const historicalSnapshots = getHistoricalAtTime(hoursRemaining);
+  if (historicalSnapshots.length) {
+    const avgHistorical = historicalSnapshots.reduce((sum, s) => sum + s.amount, 0) / historicalSnapshots.length;
+    const ratio = avgHistorical > 0 ? balance / avgHistorical : 0;
+
+    if (ratio >= 0.5 && ratio <= 2.0) {
+      score += 10;
+      factors.push({ factor: 'Historical Alignment', impact: '+10', detail: `Tracking within normal range (${ratio.toFixed(1)}x avg)` });
+    } else {
+      score -= 5;
+      factors.push({ factor: 'Historical Alignment', impact: '-5', detail: `Unusual trajectory (${ratio.toFixed(1)}x avg)` });
+    }
+  }
+
+  score = Math.max(0, Math.min(100, score));
+  const level = score >= 75 ? 'HIGH' : score >= 50 ? 'MEDIUM' : 'LOW';
+
+  const weightedProj = projections.reduce((sum, p) => sum + p.projected * p.weight, 0);
+  const rangeFactor = (100 - score) / 100 * 0.4;
+
+  return {
+    score,
+    level,
+    factors,
+    projected_final: Math.round(weightedProj),
+    range_low: Math.round(weightedProj * (1 - rangeFactor)),
+    range_high: Math.round(weightedProj * (1 + rangeFactor))
+  };
 }
 
 function calculateModelProbabilities(projections) {
@@ -159,7 +298,6 @@ function calculateModelProbabilities(projections) {
     }
     probs[t] = Math.round(prob * 1000) / 10;
   }
-
   return probs;
 }
 
@@ -184,6 +322,8 @@ export async function handler(event, context) {
 
   const projections = calculateProjections(balance, hoursRemaining);
   const modelProbs = calculateModelProbabilities(projections);
+  const confidence = calculateConfidence(projections, balance, hoursRemaining);
+  const historicalSnapshots = getHistoricalAtTime(hoursRemaining);
 
   // Calculate opportunities
   const opportunities = {};
@@ -222,7 +362,6 @@ export async function handler(event, context) {
     refreshRate = 10;
   }
 
-  // Calculate weighted projection
   const historicalWeighted = projections.reduce((sum, p) => sum + p.projected * p.weight, 0);
 
   return {
@@ -246,7 +385,9 @@ export async function handler(event, context) {
       refresh_rate: refreshRate,
       combined_projection: Math.round(historicalWeighted),
       historical_projection: Math.round(historicalWeighted),
-      data_points_collected: 0
+      data_points_collected: 0,
+      confidence,
+      historical_snapshots: historicalSnapshots
     })
   };
 }

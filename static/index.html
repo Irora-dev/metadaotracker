@@ -331,6 +331,12 @@
             <div class="stat-card highlight">
                 <div class="stat-label">Projected Final</div>
                 <div class="stat-value" id="combined-projection">--</div>
+                <div class="stat-range" id="projection-range-confidence" style="font-size: 0.8rem; opacity: 0.9; margin-top: 0.25rem;">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Confidence Score</div>
+                <div class="stat-value" id="confidence-score">--</div>
+                <div id="confidence-level" style="font-size: 0.75rem; margin-top: 0.25rem;">--</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Time Remaining</div>
@@ -340,9 +346,15 @@
                 <div class="stat-label">Transactions</div>
                 <div class="stat-value" id="tx-count">--</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Projected Range</div>
-                <div class="stat-value" id="projection-range">--</div>
+        </div>
+
+        <div class="card" style="margin-bottom: 1.5rem;">
+            <div class="card-title">Historical Comparison at Current Timestamp</div>
+            <div style="font-size: 0.75rem; color: var(--gray-600); margin-bottom: 0.5rem;">
+                Comparing Ranger's current raise to where other MetaDAO sales were at this same point before their end
+            </div>
+            <div class="chart-container" style="height: 280px;">
+                <canvas id="historicalComparisonChart"></canvas>
             </div>
         </div>
 
@@ -403,6 +415,7 @@
     <script>
         let activityChart = null;
         let probChart = null;
+        let historicalChart = null;
         let refreshInterval = 30;
         let countdownValue = refreshInterval;
 
@@ -430,18 +443,33 @@
                 document.getElementById('combined-projection').textContent = formatCurrency(data.combined_projection);
             }
 
+            // Confidence score
+            if (data.confidence) {
+                document.getElementById('confidence-score').textContent = data.confidence.score + '%';
+                const levelEl = document.getElementById('confidence-level');
+                const levelColors = { 'HIGH': '#10B981', 'MEDIUM': '#F59E0B', 'LOW': '#EF4444' };
+                levelEl.innerHTML = `<span style="color: ${levelColors[data.confidence.level] || '#6B7280'}">${data.confidence.level}</span>`;
+
+                // Confidence range
+                document.getElementById('projection-range-confidence').textContent =
+                    `Range: ${formatCurrency(data.confidence.range_low)} - ${formatCurrency(data.confidence.range_high)}`;
+            }
+
             // Update refresh rate dynamically
             if (data.refresh_rate && data.refresh_rate !== refreshInterval) {
                 refreshInterval = data.refresh_rate;
                 countdownValue = Math.min(countdownValue, refreshInterval);
             }
 
+            // Historical comparison chart
+            if (data.historical_snapshots) {
+                updateHistoricalComparisonChart(data.historical_snapshots, data.balance);
+            }
+
             // Projection range
             const projections = data.projections;
             const minProj = projections[0].projected;
             const maxProj = projections[projections.length - 1].projected;
-            document.getElementById('projection-range').textContent =
-                `${formatCurrency(minProj)} - ${formatCurrency(maxProj)}`;
 
             // Update projections list - sorted by recency weight (highest first)
             const projList = document.getElementById('projections-list');
@@ -464,6 +492,86 @@
 
             // Update opportunities table
             updateOpportunitiesTable(data.model_probabilities, data.polymarket_odds, data.opportunities);
+        }
+
+        function updateHistoricalComparisonChart(snapshots, currentBalance) {
+            const ctx = document.getElementById('historicalComparisonChart').getContext('2d');
+
+            // Prepare data - add Ranger as the first bar
+            const labels = ['RANGER (now)', ...snapshots.map(s => s.name)];
+            const amounts = [currentBalance, ...snapshots.map(s => s.amount)];
+            const finals = [null, ...snapshots.map(s => s.final)];
+
+            // Color Ranger differently
+            const colors = amounts.map((_, i) => i === 0 ? '#DC2626' : '#6B7280');
+
+            if (historicalChart) {
+                historicalChart.data.labels = labels;
+                historicalChart.data.datasets[0].data = amounts;
+                historicalChart.data.datasets[0].backgroundColor = colors;
+                historicalChart.data.datasets[1].data = finals;
+                historicalChart.update();
+            } else {
+                historicalChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'At Current Time',
+                                data: amounts,
+                                backgroundColor: colors,
+                                borderRadius: 4,
+                            },
+                            {
+                                label: 'Final Raise',
+                                data: finals,
+                                backgroundColor: 'rgba(99, 102, 241, 0.3)',
+                                borderColor: '#6366F1',
+                                borderWidth: 2,
+                                borderRadius: 4,
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const value = context.raw;
+                                        if (value === null) return '';
+                                        return context.dataset.label + ': $' + (value / 1e6).toFixed(1) + 'M';
+                                    },
+                                    afterLabel: function(context) {
+                                        if (context.datasetIndex === 0 && context.dataIndex > 0) {
+                                            const snapshot = snapshots[context.dataIndex - 1];
+                                            return `(${snapshot.pct_of_final}% of final)`;
+                                        }
+                                        return '';
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: v => '$' + (v / 1e6).toFixed(0) + 'M'
+                                }
+                            },
+                            x: {
+                                grid: { display: false }
+                            }
+                        }
+                    }
+                });
+            }
         }
 
         function updateActivityChart(hourlyData) {
