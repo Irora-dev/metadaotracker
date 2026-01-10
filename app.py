@@ -27,121 +27,62 @@ SALE_END_TIME = datetime(2026, 1, 10, 16, 0, 0)
 balance_history = deque(maxlen=1000)  # Keep last 1000 data points
 balance_history_lock = threading.Lock()
 
-# Historical patterns with multiple time snapshots
-# Ordered by sale date (oldest to newest)
+# Historical patterns with time snapshots
+# Using known data at 5.5h and interpolating with exponential surge curve
+# pct_at_5_5h values: Umbra 28.5%, Avici 23.5%, Loyal 21.7%, zkSOL 16.3%, Paystream 21.5%, Solomon 11.4%
 HISTORICAL_PATTERNS = {
     'Umbra': {
         'final': 155194912,
         'sale_date': '2025-10-10',
         'order': 1,
+        'pct_at_5_5h': 28.5,
         'snapshots': {
-            6.0: 38000000,    # 6 hours before end
-            5.5: 44220255,    # 5.5 hours before end
-            5.0: 51000000,
-            4.5: 59000000,
-            4.0: 68000000,
-            3.5: 78000000,
-            3.0: 89000000,
-            2.5: 102000000,
-            2.0: 115000000,
-            1.5: 128000000,
-            1.0: 140000000,
-            0.5: 150000000,
+            5.5: 44220255,    # Known: 28.5% of final
         }
     },
     'Avici': {
         'final': 34233177,
         'sale_date': '2025-10-18',
         'order': 2,
+        'pct_at_5_5h': 23.5,
         'snapshots': {
-            6.0: 6800000,
-            5.5: 8036796,
-            5.0: 9500000,
-            4.5: 11200000,
-            4.0: 13200000,
-            3.5: 15500000,
-            3.0: 18200000,
-            2.5: 21500000,
-            2.0: 25000000,
-            1.5: 28500000,
-            1.0: 31500000,
-            0.5: 33500000,
+            5.5: 8036796,     # Known: 23.5% of final
         }
     },
     'Loyal': {
         'final': 75898234,
         'sale_date': '2025-10-22',
         'order': 3,
+        'pct_at_5_5h': 21.7,
         'snapshots': {
-            6.0: 13500000,
-            5.5: 16437386,
-            5.0: 20000000,
-            4.5: 24500000,
-            4.0: 30000000,
-            3.5: 36500000,
-            3.0: 44000000,
-            2.5: 52000000,
-            2.0: 60000000,
-            1.5: 67000000,
-            1.0: 72000000,
-            0.5: 75000000,
+            5.5: 16437386,    # Known: 21.7% of final
         }
     },
     'zkSOL': {
         'final': 14886360,
         'sale_date': '2025-10-24',
         'order': 4,
+        'pct_at_5_5h': 16.3,
         'snapshots': {
-            6.0: 2000000,
-            5.5: 2427947,
-            5.0: 3000000,
-            4.5: 3800000,
-            4.0: 4800000,
-            3.5: 6000000,
-            3.0: 7500000,
-            2.5: 9200000,
-            2.0: 11000000,
-            1.5: 12800000,
-            1.0: 14000000,
-            0.5: 14700000,
+            5.5: 2427947,     # Known: 16.3% of final
         }
     },
     'Paystream': {
         'final': 6149247,
         'sale_date': '2025-10-27',
         'order': 5,
+        'pct_at_5_5h': 21.5,
         'snapshots': {
-            6.0: 1100000,
-            5.5: 1319085,
-            5.0: 1600000,
-            4.5: 2000000,
-            4.0: 2500000,
-            3.5: 3100000,
-            3.0: 3800000,
-            2.5: 4500000,
-            2.0: 5100000,
-            1.5: 5600000,
-            1.0: 5900000,
-            0.5: 6100000,
+            5.5: 1319085,     # Known: 21.5% of final
         }
     },
     'Solomon': {
         'final': 102932688,
         'sale_date': '2025-11-18',
         'order': 6,
+        'pct_at_5_5h': 11.4,
         'snapshots': {
-            6.0: 9500000,
-            5.5: 11779124,
-            5.0: 15000000,
-            4.5: 19500000,
-            4.0: 26000000,
-            3.5: 35000000,
-            3.0: 46000000,
-            2.5: 58000000,
-            2.0: 70000000,
-            1.5: 82000000,
-            1.0: 92000000,
-            0.5: 100000000,
+            5.5: 11779124,    # Known: 11.4% of final
         }
     },
 }
@@ -272,39 +213,71 @@ def get_polymarket_odds():
 
     return odds
 
+def estimate_pct_at_time(pct_at_5_5h, hours_remaining):
+    """
+    Estimate what percentage of final a sale would have at a given time,
+    based on known pct_at_5_5h and exponential surge curve.
+
+    For back-loaded growth (most raises happen near end):
+    pct = pct_5_5h + (100 - pct_5_5h) * (time_elapsed / 5.5)^exp
+
+    Higher exp = more back-loaded (slower early, faster late)
+    """
+    if hours_remaining >= 5.5:
+        return pct_at_5_5h
+    if hours_remaining <= 0:
+        return 100.0
+
+    # Exponential factor - higher means more back-loaded surge
+    # Solomon (11.4% at 5.5h) had very back-loaded surge
+    exp_factor = 2.5 if pct_at_5_5h < 15 else 2.0 if pct_at_5_5h < 25 else 1.5
+
+    remaining_pct = 100 - pct_at_5_5h
+    time_elapsed = 5.5 - hours_remaining
+    time_ratio = time_elapsed / 5.5
+    progress = time_ratio ** exp_factor
+
+    return pct_at_5_5h + remaining_pct * progress
+
+
 def get_historical_at_time(hours_remaining):
-    """Get historical sale amounts at a specific time before end"""
+    """Get estimated historical sale amounts at a specific time before end"""
     snapshots = []
-    # Round to nearest 0.5 hour for snapshot lookup
-    lookup_time = round(hours_remaining * 2) / 2
-    lookup_time = max(0.5, min(6.0, lookup_time))
 
     for name, data in HISTORICAL_PATTERNS.items():
-        snapshot_value = data['snapshots'].get(lookup_time)
-        if snapshot_value:
-            snapshots.append({
-                'name': name,
-                'amount': snapshot_value,
-                'final': data['final'],
-                'pct_of_final': round(snapshot_value / data['final'] * 100, 1),
-                'sale_date': data['sale_date'],
-                'order': data['order']
-            })
+        pct_at_5_5h = data.get('pct_at_5_5h', 20)
+        estimated_pct = estimate_pct_at_time(pct_at_5_5h, hours_remaining)
+        estimated_amount = data['final'] * estimated_pct / 100
+
+        snapshots.append({
+            'name': name,
+            'amount': round(estimated_amount, 0),
+            'final': data['final'],
+            'pct_of_final': round(estimated_pct, 1),
+            'sale_date': data['sale_date'],
+            'order': data['order']
+        })
 
     return sorted(snapshots, key=lambda x: x['order'])
 
 
 def calculate_projections(balance, hours_remaining):
-    """Calculate projections based on historical patterns"""
+    """
+    Calculate projections based on historical patterns.
+
+    Uses the multiplier from each sale's estimated position at current time to final.
+    """
     projections = []
 
-    # Round to nearest 0.5 hour for snapshot lookup
-    lookup_time = round(hours_remaining * 2) / 2
-    lookup_time = max(0.5, min(6.0, lookup_time))
-
     for name, data in HISTORICAL_PATTERNS.items():
-        snapshot_at_time = data['snapshots'].get(lookup_time, data['snapshots'].get(5.5))
-        mult = data['final'] / snapshot_at_time if snapshot_at_time else 1
+        pct_at_5_5h = data.get('pct_at_5_5h', 20)
+
+        # Estimate what percentage of final each sale was at this time point
+        estimated_pct = estimate_pct_at_time(pct_at_5_5h, hours_remaining)
+
+        # Multiplier from this point to final
+        mult = 100 / estimated_pct if estimated_pct > 0 else 1
+
         projected = balance * mult
 
         projections.append({
@@ -315,7 +288,8 @@ def calculate_projections(balance, hours_remaining):
             'sale_date': data.get('sale_date', ''),
             'order': data.get('order', 0),
             'final_raised': data['final'],
-            'snapshot_used': snapshot_at_time
+            'pct_at_5_5h': pct_at_5_5h,
+            'estimated_pct_now': round(estimated_pct, 1)
         })
 
     # Sort by projected value for display
