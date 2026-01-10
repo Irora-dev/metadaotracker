@@ -612,60 +612,69 @@
         }
 
         function updateProbChart(modelProbs, polymarketOdds) {
-            const ctx = document.getElementById('probChart').getContext('2d');
+            const canvas = document.getElementById('probChart');
+            const ctx = canvas.getContext('2d');
 
             const thresholds = [50, 60, 70, 80, 90, 100, 120, 140, 160];
             const labels = thresholds.map(t => `>$${t}M`);
+
             // Handle both number and string keys from JSON
-            const modelData = thresholds.map(t => modelProbs[t] ?? modelProbs[String(t)] ?? 0);
-            const pmData = thresholds.map(t => polymarketOdds[t] ?? polymarketOdds[String(t)] ?? 0);
+            const modelData = thresholds.map(t => {
+                const val = modelProbs[t] !== undefined ? modelProbs[t] : modelProbs[String(t)];
+                return val !== undefined ? val : 0;
+            });
+            const pmData = thresholds.map(t => {
+                const val = polymarketOdds[t] !== undefined ? polymarketOdds[t] : polymarketOdds[String(t)];
+                return val !== undefined ? val : 0;
+            });
 
-            console.log('Polymarket data:', pmData); // Debug
+            console.log('Model data:', modelData);
+            console.log('Polymarket data:', pmData);
+            console.log('Raw polymarket odds:', polymarketOdds);
 
+            // Destroy existing chart to ensure clean render
             if (probChart) {
-                probChart.data.datasets[0].data = modelData;
-                probChart.data.datasets[1].data = pmData;
-                probChart.update();
-            } else {
-                probChart = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: 'Model Estimate',
-                                data: modelData,
-                                backgroundColor: '#DC2626',
-                                borderRadius: 4,
-                            },
-                            {
-                                label: 'Polymarket',
-                                data: pmData,
-                                backgroundColor: '#6366F1',
-                                borderRadius: 4,
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                display: true,
-                                position: 'top'
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                max: 100,
-                                ticks: { callback: v => v + '%' }
-                            },
-                            x: { grid: { display: false } }
-                        }
-                    }
-                });
+                probChart.destroy();
             }
+
+            probChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Model Estimate',
+                            data: modelData,
+                            backgroundColor: '#DC2626',
+                            borderRadius: 4,
+                        },
+                        {
+                            label: 'Polymarket',
+                            data: pmData,
+                            backgroundColor: '#6366F1',
+                            borderRadius: 4,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { callback: v => v + '%' }
+                        },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
         }
 
         function updateOpportunitiesTable(modelProbs, polymarketOdds, opportunities) {
