@@ -21,24 +21,29 @@ USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 SALE_END_TIME = datetime(2026, 1, 10, 16, 0, 0)
 
 # Historical patterns at 5.5h before end
+# Ordered by sale date (oldest to newest)
 HISTORICAL_PATTERNS = {
-    'Umbra': {'at_5_5h': 44220255, 'final': 155194912, 'pct_at_5_5h': 28.5},
-    'Solomon': {'at_5_5h': 11779124, 'final': 102932688, 'pct_at_5_5h': 11.4},
-    'Loyal': {'at_5_5h': 16437386, 'final': 75898234, 'pct_at_5_5h': 21.7},
-    'Avici': {'at_5_5h': 8036796, 'final': 34233177, 'pct_at_5_5h': 23.5},
-    'zkSOL': {'at_5_5h': 2427947, 'final': 14886360, 'pct_at_5_5h': 16.3},
-    'Paystream': {'at_5_5h': 1319085, 'final': 6149247, 'pct_at_5_5h': 21.5},
+    'Umbra': {'at_5_5h': 44220255, 'final': 155194912, 'pct_at_5_5h': 28.5, 'sale_date': '2025-10-10', 'order': 1},
+    'Avici': {'at_5_5h': 8036796, 'final': 34233177, 'pct_at_5_5h': 23.5, 'sale_date': '2025-10-18', 'order': 2},
+    'Loyal': {'at_5_5h': 16437386, 'final': 75898234, 'pct_at_5_5h': 21.7, 'sale_date': '2025-10-22', 'order': 3},
+    'zkSOL': {'at_5_5h': 2427947, 'final': 14886360, 'pct_at_5_5h': 16.3, 'sale_date': '2025-10-24', 'order': 4},
+    'Paystream': {'at_5_5h': 1319085, 'final': 6149247, 'pct_at_5_5h': 21.5, 'sale_date': '2025-10-27', 'order': 5},
+    'Solomon': {'at_5_5h': 11779124, 'final': 102932688, 'pct_at_5_5h': 11.4, 'sale_date': '2025-11-18', 'order': 6},
 }
 
-# Pattern probability weights
+# Pattern probability weights - RECENCY WEIGHTED
+# More recent sales have higher weights as they better reflect current market conditions
+# Weights use exponential decay: newest sale (Solomon) gets highest weight
+# Order: Umbra (oldest) -> Avici -> Loyal -> zkSOL -> Paystream -> Solomon (newest)
 PATTERN_WEIGHTS = {
-    'Solomon': 0.30,
-    'Loyal': 0.25,
-    'Avici': 0.15,
-    'zkSOL': 0.15,
-    'Paystream': 0.10,
-    'Umbra': 0.05,
+    'Solomon': 0.35,    # Most recent (Nov 2025) - highest weight
+    'Paystream': 0.25,  # Oct 27, 2025
+    'zkSOL': 0.17,      # Oct 24, 2025
+    'Loyal': 0.12,      # Oct 22, 2025
+    'Avici': 0.07,      # Oct 18, 2025
+    'Umbra': 0.04,      # Oct 10, 2025 (oldest) - lowest weight
 }
+# Total: 100%
 
 def get_ranger_balance():
     """Fetch current USDC balance from Solana RPC"""
@@ -158,9 +163,13 @@ def calculate_projections(balance, hours_remaining):
             'name': name,
             'multiplier': round(adjusted_mult, 2),
             'projected': round(projected, 0),
-            'weight': PATTERN_WEIGHTS.get(name, 0)
+            'weight': PATTERN_WEIGHTS.get(name, 0),
+            'sale_date': data.get('sale_date', ''),
+            'order': data.get('order', 0),
+            'final_raised': data['final']
         })
 
+    # Sort by projected value for display
     return sorted(projections, key=lambda x: x['projected'])
 
 def calculate_model_probabilities(projections):

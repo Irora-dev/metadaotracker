@@ -350,7 +350,10 @@
                 </div>
             </div>
             <div class="card">
-                <div class="card-title">Projections by Pattern</div>
+                <div class="card-title">Projections by Pattern (Recency Weighted)</div>
+                <div style="font-size: 0.7rem; color: var(--gray-600); margin-bottom: 0.75rem;">
+                    Newer sales weighted higher: Solomon (35%) → Paystream (25%) → zkSOL (17%) → Loyal (12%) → Avici (7%) → Umbra (4%)
+                </div>
                 <div class="projections-list" id="projections-list">
                     <div class="loading">Loading projections...</div>
                 </div>
@@ -425,13 +428,14 @@
             document.getElementById('projection-range').textContent =
                 `${formatCurrency(minProj)} - ${formatCurrency(maxProj)}`;
 
-            // Update projections list
+            // Update projections list - sorted by recency weight (highest first)
             const projList = document.getElementById('projections-list');
-            projList.innerHTML = projections.map(p => `
-                <div class="projection-item">
+            const sortedByWeight = [...projections].sort((a, b) => b.weight - a.weight);
+            projList.innerHTML = sortedByWeight.map(p => `
+                <div class="projection-item" style="border-left: 3px solid ${p.weight >= 0.25 ? '#DC2626' : p.weight >= 0.10 ? '#F59E0B' : '#9CA3AF'};">
                     <div>
-                        <div class="projection-name">${p.name}</div>
-                        <div class="projection-mult">${p.multiplier}x multiplier • ${(p.weight * 100).toFixed(0)}% weight</div>
+                        <div class="projection-name">${p.name} <span style="font-size: 0.7rem; color: var(--gray-600);">(${p.sale_date})</span></div>
+                        <div class="projection-mult">${p.multiplier}x mult • <strong style="color: ${p.weight >= 0.25 ? '#DC2626' : 'inherit'};">${(p.weight * 100).toFixed(0)}% weight</strong> • Raised $${(p.final_raised/1000000).toFixed(0)}M</div>
                     </div>
                     <div class="projection-value">${formatCurrency(p.projected)}</div>
                 </div>
