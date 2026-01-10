@@ -328,6 +328,10 @@
                 <div class="stat-label">Current Raised</div>
                 <div class="stat-value" id="balance">Loading...</div>
             </div>
+            <div class="stat-card highlight">
+                <div class="stat-label">Projected Final</div>
+                <div class="stat-value" id="combined-projection">--</div>
+            </div>
             <div class="stat-card">
                 <div class="stat-label">Time Remaining</div>
                 <div class="stat-value" id="time-remaining">--:--</div>
@@ -420,6 +424,17 @@
             document.getElementById('balance').textContent = formatCurrency(data.balance);
             document.getElementById('time-remaining').textContent = formatTime(data.hours_remaining);
             document.getElementById('tx-count').textContent = data.transactions.toLocaleString();
+
+            // Combined projection
+            if (data.combined_projection) {
+                document.getElementById('combined-projection').textContent = formatCurrency(data.combined_projection);
+            }
+
+            // Update refresh rate dynamically
+            if (data.refresh_rate && data.refresh_rate !== refreshInterval) {
+                refreshInterval = data.refresh_rate;
+                countdownValue = Math.min(countdownValue, refreshInterval);
+            }
 
             // Projection range
             const projections = data.projections;

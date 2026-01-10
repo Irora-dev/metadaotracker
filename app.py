@@ -8,9 +8,11 @@ from flask_cors import CORS
 import json
 import subprocess
 import requests
-from datetime import datetime
-from collections import defaultdict
+from datetime import datetime, timedelta
+from collections import defaultdict, deque
 import re
+import threading
+import time
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -19,6 +21,11 @@ CORS(app)
 RANGER_WALLET = "9ApaAe39Z8GEXfqm7F7HL545N4J4tN7RhF8FhS88pRNp"
 USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 SALE_END_TIME = datetime(2026, 1, 10, 16, 0, 0)
+
+# Historical balance tracking for velocity calculations
+# Stores tuples of (timestamp, balance)
+balance_history = deque(maxlen=1000)  # Keep last 1000 data points
+balance_history_lock = threading.Lock()
 
 # Historical patterns at 5.5h before end
 # Ordered by sale date (oldest to newest)
@@ -186,6 +193,99 @@ def calculate_model_probabilities(projections):
 
     return probs
 
+def record_balance(balance):
+    """Record a balance data point for velocity tracking"""
+    with balance_history_lock:
+        balance_history.append((datetime.utcnow(), balance))
+
+def calculate_velocity(minutes_lookback):
+    """Calculate the rate of change over the specified time period"""
+    with balance_history_lock:
+        if len(balance_history) < 2:
+            return None
+
+        now = datetime.utcnow()
+        cutoff = now - timedelta(minutes=minutes_lookback)
+
+        # Find data points within the lookback period
+        recent_points = [(ts, bal) for ts, bal in balance_history if ts >= cutoff]
+
+        if len(recent_points) < 2:
+            # Not enough data in this period, use all available data
+            recent_points = list(balance_history)
+
+        if len(recent_points) < 2:
+            return None
+
+        # Calculate velocity (change per hour)
+        oldest = recent_points[0]
+        newest = recent_points[-1]
+
+        time_diff_hours = (newest[0] - oldest[0]).total_seconds() / 3600
+        if time_diff_hours < 0.001:  # Less than 3.6 seconds
+            return None
+
+        balance_diff = newest[1] - oldest[1]
+        velocity_per_hour = balance_diff / time_diff_hours
+
+        return {
+            'velocity_per_hour': velocity_per_hour,
+            'velocity_per_minute': velocity_per_hour / 60,
+            'time_span_minutes': time_diff_hours * 60,
+            'balance_change': balance_diff,
+            'start_balance': oldest[1],
+            'end_balance': newest[1],
+            'data_points': len(recent_points)
+        }
+
+def calculate_velocity_projection(current_balance, hours_remaining):
+    """Calculate projected final raise based on different velocity timeframes"""
+    velocities = {}
+    projections = {}
+
+    # Calculate velocities for different time periods
+    periods = [
+        ('5m', 5),
+        ('10m', 10),
+        ('30m', 30),
+        ('1h', 60),
+        ('2h', 120),
+    ]
+
+    for name, minutes in periods:
+        vel = calculate_velocity(minutes)
+        if vel and vel['velocity_per_hour'] is not None:
+            velocities[name] = vel
+            # Project final based on this velocity
+            projected_additional = vel['velocity_per_hour'] * hours_remaining
+            projections[name] = {
+                'projected_final': current_balance + projected_additional,
+                'velocity_per_hour': vel['velocity_per_hour'],
+                'velocity_per_minute': vel['velocity_per_minute'],
+                'data_points': vel['data_points'],
+                'time_span_minutes': vel['time_span_minutes']
+            }
+
+    # Calculate weighted average projection (more weight to recent data)
+    weights = {'5m': 0.35, '10m': 0.30, '30m': 0.20, '1h': 0.10, '2h': 0.05}
+    weighted_sum = 0
+    weight_total = 0
+
+    for period, weight in weights.items():
+        if period in projections:
+            weighted_sum += projections[period]['projected_final'] * weight
+            weight_total += weight
+
+    weighted_projection = weighted_sum / weight_total if weight_total > 0 else current_balance
+
+    return {
+        'velocities': velocities,
+        'projections': projections,
+        'weighted_projection': weighted_projection,
+        'current_balance': current_balance,
+        'hours_remaining': hours_remaining
+    }
+
 @app.route('/')
 def index():
     return send_from_directory('static', 'index.html')
@@ -203,8 +303,14 @@ def get_data():
     if balance is None:
         return jsonify({'error': 'Could not fetch balance'}), 500
 
+    # Record balance for velocity tracking
+    record_balance(balance)
+
     projections = calculate_projections(balance, hours_remaining)
     model_probs = calculate_model_probabilities(projections)
+
+    # Calculate velocity-based projections
+    velocity_data = calculate_velocity_projection(balance, hours_remaining)
 
     # Calculate value opportunities
     opportunities = {}
@@ -230,6 +336,24 @@ def get_data():
                 'transactions': tx_data['hourly'][hour]
             })
 
+    # Determine refresh rate based on time remaining
+    if hours_remaining <= 1:
+        refresh_rate = 5  # 5 seconds in last hour
+    elif hours_remaining <= 2:
+        refresh_rate = 10  # 10 seconds in last 2 hours
+    else:
+        refresh_rate = 30  # 30 seconds otherwise
+
+    # Calculate combined projection (historical patterns + velocity)
+    historical_weighted = sum(p['projected'] * p['weight'] for p in projections)
+    velocity_weighted = velocity_data.get('weighted_projection', balance)
+
+    # Blend historical and velocity projections (60% historical, 40% velocity when we have good data)
+    if velocity_data.get('projections'):
+        combined_projection = (historical_weighted * 0.6) + (velocity_weighted * 0.4)
+    else:
+        combined_projection = historical_weighted
+
     return jsonify({
         'timestamp': now.isoformat(),
         'hours_remaining': round(hours_remaining, 2),
@@ -241,7 +365,12 @@ def get_data():
         'polymarket_odds': polymarket_odds,
         'opportunities': opportunities,
         'hourly_activity': hourly_data,
-        'sale_ended': hours_remaining <= 0
+        'sale_ended': hours_remaining <= 0,
+        'refresh_rate': refresh_rate,
+        'velocity': velocity_data,
+        'combined_projection': round(combined_projection, 0),
+        'historical_projection': round(historical_weighted, 0),
+        'data_points_collected': len(balance_history)
     })
 
 @app.route('/api/historical')

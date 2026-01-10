@@ -6,27 +6,29 @@ Real-time tracking and analysis dashboard for MetaDAO public sales on Solana.
 
 - **Live Balance Tracking**: Fetches current USDC balance from Solana RPC
 - **Historical Pattern Analysis**: Compares against previous MetaDAO raises (Umbra, Solomon, Loyal, Avici, zkSOL, Paystream)
-- **Projection Models**: Calculates expected final raise amounts based on historical multipliers
+- **Projection Models**: Calculates expected final raise amounts based on recency-weighted historical multipliers
 - **Polymarket Integration**: Fetches and compares odds from Polymarket prediction markets
 - **Value Signals**: Identifies potential mispricings between model estimates and market odds
+- **Dynamic Refresh**: 5s refresh in last hour, 10s in last 2 hours, 30s otherwise
 
-## Installation
+## Deployment
+
+### Netlify (Recommended)
+
+1. Connect your GitHub repo to Netlify
+2. Build settings are auto-configured via `netlify.toml`
+3. Deploy automatically on push
+
+### Local Development
 
 ```bash
 pip install flask flask-cors requests
-```
-
-## Usage
-
-### Start the Web Dashboard
-
-```bash
 python3 app.py
 ```
 
 Open http://localhost:8080 in your browser.
 
-### Run CLI Analysis
+### CLI Analysis
 
 ```bash
 python3 ranger_analysis.py
@@ -46,14 +48,15 @@ python3 ranger_analysis.py
 
 ## Configuration
 
-Edit the following in `app.py`:
+Edit the following in `app.py` (or `netlify/functions/data.js` for Netlify):
 
 - `RANGER_WALLET` - Solana wallet address to track
 - `SALE_END_TIME` - Expected end time of the raise
 - `HISTORICAL_PATTERNS` - Reference data from past raises
+- `PATTERN_WEIGHTS` - Recency-weighted probabilities for each historical sale
 
 ## Tech Stack
 
-- **Backend**: Python/Flask
+- **Backend**: Python/Flask (local) or Netlify Functions (deployed)
 - **Frontend**: Vanilla JS with Chart.js
 - **Data Source**: Solana RPC, Polymarket API
