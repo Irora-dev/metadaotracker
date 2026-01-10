@@ -616,8 +616,11 @@
 
             const thresholds = [50, 60, 70, 80, 90, 100, 120, 140, 160];
             const labels = thresholds.map(t => `>$${t}M`);
-            const modelData = thresholds.map(t => modelProbs[t] || 0);
-            const pmData = thresholds.map(t => polymarketOdds[t] || 0);
+            // Handle both number and string keys from JSON
+            const modelData = thresholds.map(t => modelProbs[t] ?? modelProbs[String(t)] ?? 0);
+            const pmData = thresholds.map(t => polymarketOdds[t] ?? polymarketOdds[String(t)] ?? 0);
+
+            console.log('Polymarket data:', pmData); // Debug
 
             if (probChart) {
                 probChart.data.datasets[0].data = modelData;
@@ -647,7 +650,10 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            legend: { display: false }
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
                         },
                         scales: {
                             y: {
@@ -667,8 +673,8 @@
             const thresholds = [15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 140, 160, 180, 200];
 
             tbody.innerHTML = thresholds.map(t => {
-                const model = modelProbs[t] || 0;
-                const pm = polymarketOdds[t] || 0;
+                const model = modelProbs[t] ?? modelProbs[String(t)] ?? 0;
+                const pm = polymarketOdds[t] ?? polymarketOdds[String(t)] ?? 0;
                 const diff = model - pm;
                 const opp = opportunities[t] || { action: 'FAIR', edge: 0 };
 
