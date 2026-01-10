@@ -147,9 +147,17 @@ async function getPolymarketOdds() {
           const match = question.match(/over\s*\$?(\d+)m/);
           if (match) {
             const threshold = parseInt(match[1]);
-            const prices = market.outcomePrices || [];
+            // outcomePrices may be a JSON string, parse if needed
+            let prices = market.outcomePrices || [];
+            if (typeof prices === 'string') {
+              try {
+                prices = JSON.parse(prices);
+              } catch (e) {
+                prices = [];
+              }
+            }
             if (prices.length > 0) {
-              odds[threshold] = parseFloat(prices[0]) * 100;
+              odds[threshold] = Math.round(parseFloat(prices[0]) * 1000) / 10;
             }
           }
         }

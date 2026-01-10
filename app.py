@@ -244,11 +244,19 @@ def get_polymarket_odds():
                     if match:
                         threshold = int(match.group(1))
                         # Get the YES price (outcomePrices[0] is typically YES)
-                        prices = market.get('outcomePrices', [])
+                        prices_raw = market.get('outcomePrices', [])
+                        # outcomePrices may be a JSON string, parse if needed
+                        if isinstance(prices_raw, str):
+                            try:
+                                prices = json.loads(prices_raw)
+                            except:
+                                prices = []
+                        else:
+                            prices = prices_raw
                         if prices and len(prices) > 0:
                             try:
                                 yes_price = float(prices[0]) * 100  # Convert to percentage
-                                odds[threshold] = yes_price
+                                odds[threshold] = round(yes_price, 1)
                             except:
                                 pass
     except Exception as e:
