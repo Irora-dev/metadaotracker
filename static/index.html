@@ -615,7 +615,7 @@
             const canvas = document.getElementById('probChart');
             const ctx = canvas.getContext('2d');
 
-            const thresholds = [50, 60, 70, 80, 90, 100, 120, 140, 160];
+            const thresholds = [20, 30, 40, 50, 60, 70, 80, 90, 100];
             const labels = thresholds.map(t => `>$${t}M`);
 
             // Handle both number and string keys from JSON
