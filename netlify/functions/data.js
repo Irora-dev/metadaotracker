@@ -1,8 +1,10 @@
-// Ranger Finance Raise Tracker - Netlify Serverless Function
+// MetaDAO Raise Tracker - Netlify Serverless Function
 
-const RANGER_WALLET = "9ApaAe39Z8GEXfqm7F7HL545N4J4tN7RhF8FhS88pRNp";
+// Default configuration (can be overridden via query params)
+const DEFAULT_WALLET = "9ApaAe39Z8GEXfqm7F7HL545N4J4tN7RhF8FhS88pRNp";
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-const SALE_END_TIME = new Date("2026-01-10T16:00:00Z");
+const DEFAULT_SALE_END_TIME = new Date("2026-01-10T16:00:00Z");
+const DEFAULT_POLYMARKET_SLUG = "total-commitments-for-the-ranger-public-sale-on-metadao";
 
 // Historical patterns with known data at 5.5h before end
 const HISTORICAL_PATTERNS = {
@@ -53,7 +55,8 @@ const PATTERN_WEIGHTS = {
   'Umbra': 0.04
 };
 
-async function getRangerBalance() {
+async function getRangerBalance(wallet) {
+  wallet = wallet || DEFAULT_WALLET;
   try {
     const response = await fetch('https://api.mainnet-beta.solana.com', {
       method: 'POST',
@@ -62,7 +65,7 @@ async function getRangerBalance() {
         jsonrpc: '2.0',
         id: 1,
         method: 'getTokenAccountsByOwner',
-        params: [RANGER_WALLET, { mint: USDC_MINT }, { encoding: 'jsonParsed' }]
+        params: [wallet, { mint: USDC_MINT }, { encoding: 'jsonParsed' }]
       })
     });
     const data = await response.json();
@@ -76,7 +79,8 @@ async function getRangerBalance() {
   return null;
 }
 
-async function getTransactionData() {
+async function getTransactionData(wallet) {
+  wallet = wallet || DEFAULT_WALLET;
   try {
     const response = await fetch('https://api.mainnet-beta.solana.com', {
       method: 'POST',
@@ -85,7 +89,7 @@ async function getTransactionData() {
         jsonrpc: '2.0',
         id: 1,
         method: 'getSignaturesForAddress',
-        params: [RANGER_WALLET, { limit: 1000 }]
+        params: [wallet, { limit: 1000 }]
       })
     });
     const data = await response.json();
@@ -107,11 +111,18 @@ async function getTransactionData() {
   return null;
 }
 
-async function getPolymarketOdds() {
+async function getPolymarketOdds(polymarketSlug) {
+  polymarketSlug = polymarketSlug || DEFAULT_POLYMARKET_SLUG;
   let odds = {};
+
+  // Skip if no slug provided
+  if (!polymarketSlug) {
+    return odds;
+  }
+
   try {
     const response = await fetch(
-      'https://gamma-api.polymarket.com/events?slug=total-commitments-for-the-ranger-public-sale-on-metadao',
+      `https://gamma-api.polymarket.com/events?slug=${polymarketSlug}`,
       { headers: { Accept: 'application/json' } }
     );
     if (response.ok) {
@@ -298,21 +309,40 @@ function calculateModelProbabilities(projections) {
 }
 
 export async function handler(event, context) {
+  // Parse query parameters
+  const params = event.queryStringParameters || {};
+  const wallet = params.wallet || DEFAULT_WALLET;
+  const endTimeStr = params.endTime || null;
+  const polymarketSlug = params.polymarketSlug || DEFAULT_POLYMARKET_SLUG;
+
+  // Parse end time
+  let saleEndTime = DEFAULT_SALE_END_TIME;
+  if (endTimeStr) {
+    try {
+      saleEndTime = new Date(endTimeStr);
+      if (isNaN(saleEndTime.getTime())) {
+        saleEndTime = DEFAULT_SALE_END_TIME;
+      }
+    } catch (e) {
+      saleEndTime = DEFAULT_SALE_END_TIME;
+    }
+  }
+
   const now = new Date();
-  const timeRemaining = SALE_END_TIME - now;
+  const timeRemaining = saleEndTime - now;
   const hoursRemaining = Math.max(0, timeRemaining / (1000 * 3600));
 
   const [balance, txData, polymarketOdds] = await Promise.all([
-    getRangerBalance(),
-    getTransactionData(),
-    getPolymarketOdds()
+    getRangerBalance(wallet),
+    getTransactionData(wallet),
+    getPolymarketOdds(polymarketSlug)
   ]);
 
   if (balance === null) {
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Could not fetch balance' })
+      body: JSON.stringify({ error: 'Could not fetch balance', wallet: wallet })
     };
   }
 
@@ -383,7 +413,12 @@ export async function handler(event, context) {
       historical_projection: Math.round(historicalWeighted),
       data_points_collected: 0,
       confidence,
-      historical_snapshots: historicalSnapshots
+      historical_snapshots: historicalSnapshots,
+      config: {
+        wallet: wallet,
+        sale_end_time: saleEndTime.toISOString(),
+        polymarket_slug: polymarketSlug
+      }
     })
   };
 }

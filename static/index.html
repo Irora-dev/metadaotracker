@@ -314,12 +314,227 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
         }
+
+        .config-btn {
+            position: absolute;
+            right: 2rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+        }
+
+        .config-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .header {
+            position: relative;
+        }
+
+        .config-panel {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .config-panel.active {
+            display: flex;
+        }
+
+        .config-content {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .config-content h3 {
+            margin-bottom: 1.5rem;
+            color: var(--gray-800);
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--gray-800);
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-red);
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 0.25rem;
+            color: var(--gray-600);
+            font-size: 0.75rem;
+        }
+
+        .config-buttons {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.25rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary-red);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--dark-red);
+        }
+
+        .btn-secondary {
+            background: var(--gray-200);
+            color: var(--gray-800);
+        }
+
+        .btn-secondary:hover {
+            background: var(--gray-300);
+        }
+
+        .config-presets {
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--gray-200);
+        }
+
+        .config-presets h4 {
+            margin-bottom: 1rem;
+            color: var(--gray-600);
+            font-size: 0.85rem;
+        }
+
+        .preset-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .preset-btn {
+            padding: 0.5rem 1rem;
+            background: var(--gray-100);
+            border: 1px solid var(--gray-300);
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .preset-btn:hover {
+            background: var(--light-red);
+            border-color: var(--primary-red);
+            color: var(--primary-red);
+        }
+
+        .current-config {
+            background: var(--gray-100);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            margin-left: 1rem;
+            font-size: 0.8rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .current-config .wallet-short {
+            font-family: monospace;
+            background: var(--gray-200);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>Ranger Finance Raise Tracker</h1>
+        <h1 id="sale-title">MetaDAO Raise Tracker</h1>
         <p class="subtitle">Live MetaDAO Public Sale Analysis</p>
+        <button class="config-btn" onclick="toggleConfig()">Configure Sale</button>
+    </div>
+
+    <div class="config-panel" id="config-panel">
+        <div class="config-content">
+            <h3>Configure Sale Tracking</h3>
+            <div class="config-form">
+                <div class="form-group">
+                    <label for="sale-name">Sale Name</label>
+                    <input type="text" id="sale-name" placeholder="e.g., Ranger Finance">
+                </div>
+                <div class="form-group">
+                    <label for="wallet-input">Solscan Link or Wallet Address</label>
+                    <input type="text" id="wallet-input" placeholder="https://solscan.io/account/... or wallet address">
+                    <small>Paste a Solscan account URL or the raw Solana wallet address</small>
+                </div>
+                <div class="form-group">
+                    <label for="end-time">Sale End Time (UTC)</label>
+                    <input type="datetime-local" id="end-time">
+                </div>
+                <div class="form-group">
+                    <label for="polymarket-slug">Polymarket Event Slug (optional)</label>
+                    <input type="text" id="polymarket-slug" placeholder="e.g., total-commitments-for-the-ranger-public-sale-on-metadao">
+                    <small>The slug from the Polymarket event URL</small>
+                </div>
+                <div class="config-buttons">
+                    <button class="btn btn-primary" onclick="saveConfig()">Save & Track</button>
+                    <button class="btn btn-secondary" onclick="resetConfig()">Reset to Default</button>
+                    <button class="btn btn-secondary" onclick="toggleConfig()">Cancel</button>
+                </div>
+            </div>
+            <div class="config-presets">
+                <h4>Quick Presets (Historical Sales)</h4>
+                <div class="preset-list">
+                    <button class="preset-btn" onclick="loadPreset('ranger')">Ranger Finance</button>
+                    <button class="preset-btn" onclick="loadPreset('solomon')">Solomon</button>
+                    <button class="preset-btn" onclick="loadPreset('umbra')">Umbra</button>
+                    <button class="preset-btn" onclick="loadPreset('loyal')">Loyal</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="container">
@@ -418,6 +633,160 @@
         let historicalChart = null;
         let refreshInterval = 30;
         let countdownValue = refreshInterval;
+
+        // Default configuration
+        const DEFAULT_CONFIG = {
+            saleName: 'Ranger Finance',
+            wallet: '9ApaAe39Z8GEXfqm7F7HL545N4J4tN7RhF8FhS88pRNp',
+            endTime: '2026-01-10T16:00:00Z',
+            polymarketSlug: 'total-commitments-for-the-ranger-public-sale-on-metadao'
+        };
+
+        // Preset configurations for historical sales
+        const PRESETS = {
+            ranger: {
+                saleName: 'Ranger Finance',
+                wallet: '9ApaAe39Z8GEXfqm7F7HL545N4J4tN7RhF8FhS88pRNp',
+                endTime: '2026-01-10T16:00:00Z',
+                polymarketSlug: 'total-commitments-for-the-ranger-public-sale-on-metadao'
+            },
+            solomon: {
+                saleName: 'Solomon',
+                wallet: 'So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tF4JmR',
+                endTime: '2025-11-18T16:00:00Z',
+                polymarketSlug: ''
+            },
+            umbra: {
+                saleName: 'Umbra',
+                wallet: 'UMBRAwPbQqbrEGPK9hKsJhKEuYRBpHbJm9B3bqK4p8E',
+                endTime: '2025-10-10T16:00:00Z',
+                polymarketSlug: ''
+            },
+            loyal: {
+                saleName: 'Loyal',
+                wallet: 'LoYALTYC8zZoHKRNtNQJiMGxXKrJ7sS7SntKvQTuvLy',
+                endTime: '2025-10-22T16:00:00Z',
+                polymarketSlug: ''
+            }
+        };
+
+        // Current configuration
+        let currentConfig = { ...DEFAULT_CONFIG };
+
+        function loadConfig() {
+            const saved = localStorage.getItem('metadao-tracker-config');
+            if (saved) {
+                try {
+                    currentConfig = JSON.parse(saved);
+                } catch (e) {
+                    currentConfig = { ...DEFAULT_CONFIG };
+                }
+            }
+            updateUIFromConfig();
+        }
+
+        function saveConfig() {
+            const walletInput = document.getElementById('wallet-input').value.trim();
+            const saleName = document.getElementById('sale-name').value.trim();
+            const endTime = document.getElementById('end-time').value;
+            const polymarketSlug = document.getElementById('polymarket-slug').value.trim();
+
+            // Parse wallet from Solscan link or use as-is
+            let wallet = walletInput;
+            const solscanMatch = walletInput.match(/solscan\.io\/account\/([A-Za-z0-9]{32,44})/);
+            if (solscanMatch) {
+                wallet = solscanMatch[1];
+            }
+
+            if (!wallet || wallet.length < 32) {
+                alert('Please enter a valid Solana wallet address or Solscan link');
+                return;
+            }
+
+            if (!endTime) {
+                alert('Please set a sale end time');
+                return;
+            }
+
+            currentConfig = {
+                saleName: saleName || 'MetaDAO Sale',
+                wallet: wallet,
+                endTime: new Date(endTime).toISOString(),
+                polymarketSlug: polymarketSlug
+            };
+
+            localStorage.setItem('metadao-tracker-config', JSON.stringify(currentConfig));
+            updateUIFromConfig();
+            toggleConfig();
+
+            // Reset charts and fetch new data
+            if (activityChart) activityChart.destroy();
+            if (probChart) probChart.destroy();
+            if (historicalChart) historicalChart.destroy();
+            activityChart = null;
+            probChart = null;
+            historicalChart = null;
+
+            fetchData();
+        }
+
+        function resetConfig() {
+            localStorage.removeItem('metadao-tracker-config');
+            currentConfig = { ...DEFAULT_CONFIG };
+            updateUIFromConfig();
+            populateConfigForm();
+        }
+
+        function loadPreset(presetName) {
+            const preset = PRESETS[presetName];
+            if (preset) {
+                document.getElementById('sale-name').value = preset.saleName;
+                document.getElementById('wallet-input').value = preset.wallet;
+                document.getElementById('polymarket-slug').value = preset.polymarketSlug || '';
+
+                // Format datetime-local value
+                const dt = new Date(preset.endTime);
+                const localDt = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000);
+                document.getElementById('end-time').value = localDt.toISOString().slice(0, 16);
+            }
+        }
+
+        function updateUIFromConfig() {
+            document.getElementById('sale-title').textContent = currentConfig.saleName + ' Raise Tracker';
+            document.title = currentConfig.saleName + ' Raise Tracker';
+        }
+
+        function populateConfigForm() {
+            document.getElementById('sale-name').value = currentConfig.saleName;
+            document.getElementById('wallet-input').value = currentConfig.wallet;
+            document.getElementById('polymarket-slug').value = currentConfig.polymarketSlug || '';
+
+            // Format datetime-local value
+            const dt = new Date(currentConfig.endTime);
+            const localDt = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000);
+            document.getElementById('end-time').value = localDt.toISOString().slice(0, 16);
+        }
+
+        function toggleConfig() {
+            const panel = document.getElementById('config-panel');
+            const isActive = panel.classList.contains('active');
+
+            if (!isActive) {
+                populateConfigForm();
+            }
+
+            panel.classList.toggle('active');
+        }
+
+        function parseWalletFromInput(input) {
+            // Try to extract wallet from Solscan URL
+            const solscanMatch = input.match(/solscan\.io\/account\/([A-Za-z0-9]{32,44})/);
+            if (solscanMatch) {
+                return solscanMatch[1];
+            }
+            // Otherwise assume it's a raw wallet address
+            return input.trim();
+        }
 
         function formatCurrency(value) {
             if (value >= 1000000) {
@@ -717,11 +1086,19 @@
 
         async function fetchData() {
             try {
-                const response = await fetch('/api/data');
+                // Build API URL with configuration parameters
+                const params = new URLSearchParams({
+                    wallet: currentConfig.wallet,
+                    endTime: currentConfig.endTime,
+                    polymarketSlug: currentConfig.polymarketSlug || ''
+                });
+
+                const response = await fetch(`/api/data?${params}`);
                 const data = await response.json();
 
                 if (data.error) {
                     console.error('API Error:', data.error);
+                    document.getElementById('balance').textContent = 'Error loading data';
                     return;
                 }
 
@@ -732,6 +1109,7 @@
                 }
             } catch (error) {
                 console.error('Fetch error:', error);
+                document.getElementById('balance').textContent = 'Connection error';
             }
         }
 
@@ -746,10 +1124,28 @@
         }
 
         // Initial load
+        loadConfig();
         fetchData();
 
         // Auto-refresh
         setInterval(updateCountdown, 1000);
+
+        // Close config panel on escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const panel = document.getElementById('config-panel');
+                if (panel.classList.contains('active')) {
+                    toggleConfig();
+                }
+            }
+        });
+
+        // Close config panel when clicking outside
+        document.getElementById('config-panel').addEventListener('click', (e) => {
+            if (e.target.id === 'config-panel') {
+                toggleConfig();
+            }
+        });
     </script>
 </body>
 </html>

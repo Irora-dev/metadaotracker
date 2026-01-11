@@ -3,7 +3,7 @@
 Ranger Finance Raise Tracker - Web Dashboard
 """
 
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 import json
 import subprocess
@@ -17,10 +17,11 @@ import time
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
-# Configuration
-RANGER_WALLET = "9ApaAe39Z8GEXfqm7F7HL545N4J4tN7RhF8FhS88pRNp"
+# Default Configuration (can be overridden via query params)
+DEFAULT_WALLET = "9ApaAe39Z8GEXfqm7F7HL545N4J4tN7RhF8FhS88pRNp"
 USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-SALE_END_TIME = datetime(2026, 1, 10, 16, 0, 0)
+DEFAULT_SALE_END_TIME = datetime(2026, 1, 10, 16, 0, 0)
+DEFAULT_POLYMARKET_SLUG = "total-commitments-for-the-ranger-public-sale-on-metadao"
 
 # Historical balance tracking for velocity calculations
 # Stores tuples of (timestamp, balance)
@@ -101,9 +102,10 @@ PATTERN_WEIGHTS = {
 }
 # Total: 100%
 
-def get_ranger_balance():
+def get_ranger_balance(wallet=None):
     """Fetch current USDC balance from Solana RPC"""
-    cmd = f'''curl -s 'https://api.mainnet-beta.solana.com' -X POST -H "Content-Type: application/json" -d '{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountsByOwner","params":["{RANGER_WALLET}",{{"mint":"{USDC_MINT}"}},{{"encoding":"jsonParsed"}}]}}'  '''
+    wallet = wallet or DEFAULT_WALLET
+    cmd = f'''curl -s 'https://api.mainnet-beta.solana.com' -X POST -H "Content-Type: application/json" -d '{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountsByOwner","params":["{wallet}",{{"mint":"{USDC_MINT}"}},{{"encoding":"jsonParsed"}}]}}'  '''
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     try:
         data = json.loads(result.stdout)
@@ -114,9 +116,10 @@ def get_ranger_balance():
         pass
     return None
 
-def get_transaction_data():
+def get_transaction_data(wallet=None):
     """Fetch recent transaction data"""
-    cmd = f'''curl -s 'https://api.mainnet-beta.solana.com' -X POST -H "Content-Type: application/json" -d '{{"jsonrpc":"2.0","id":1,"method":"getSignaturesForAddress","params":["{RANGER_WALLET}",{{"limit":1000}}]}}'  '''
+    wallet = wallet or DEFAULT_WALLET
+    cmd = f'''curl -s 'https://api.mainnet-beta.solana.com' -X POST -H "Content-Type: application/json" -d '{{"jsonrpc":"2.0","id":1,"method":"getSignaturesForAddress","params":["{wallet}",{{"limit":1000}}]}}'  '''
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     try:
         data = json.loads(result.stdout)
@@ -139,37 +142,22 @@ def get_transaction_data():
         pass
     return None
 
-def get_polymarket_odds():
-    """Fetch Polymarket odds for Ranger thresholds"""
-    # Polymarket event slugs for each threshold
-    polymarket_markets = {
-        15: "over-15m-committed-to-the-ranger-public-sale",
-        20: "over-20m-committed-to-the-ranger-public-sale",
-        30: "over-30m-committed-to-the-ranger-public-sale",
-        40: "over-40m-committed-to-the-ranger-public-sale-819-688",
-        50: "over-50m-committed-to-the-ranger-public-sale",
-        60: "over-60m-committed-to-the-ranger-public-sale",
-        70: "over-70m-committed-to-the-ranger-public-sale",
-        80: "over-80m-committed-to-the-ranger-public-sale",
-        90: "over-90m-committed-to-the-ranger-public-sale",
-        100: "over-100m-committed-to-the-ranger-public-sale",
-        120: "over-120m-committed-to-the-ranger-public-sale",
-        140: "over-140m-committed-to-the-ranger-public-sale",
-        160: "over-160m-committed-to-the-ranger-public-sale",
-        180: "over-180m-committed-to-the-ranger-public-sale",
-        200: "over-200m-committed-to-the-ranger-public-sale",
-    }
+def get_polymarket_odds(polymarket_slug=None):
+    """Fetch Polymarket odds for sale thresholds"""
+    polymarket_slug = polymarket_slug or DEFAULT_POLYMARKET_SLUG
 
     odds = {}
 
+    # Skip if no slug provided
+    if not polymarket_slug:
+        return odds
+
     # Try to fetch from Polymarket API (CLOB API)
     try:
-        # Polymarket CLOB API endpoint
-        api_url = "https://clob.polymarket.com/markets"
         headers = {"Accept": "application/json"}
 
         # Try the gamma API which is more accessible
-        gamma_url = "https://gamma-api.polymarket.com/events?slug=total-commitments-for-the-ranger-public-sale-on-metadao"
+        gamma_url = f"https://gamma-api.polymarket.com/events?slug={polymarket_slug}"
         response = requests.get(gamma_url, headers=headers, timeout=10)
 
         if response.status_code == 200:
@@ -482,16 +470,30 @@ def index():
 
 @app.route('/api/data')
 def get_data():
+    # Get configuration from query params
+    wallet = request.args.get('wallet', DEFAULT_WALLET)
+    end_time_str = request.args.get('endTime', None)
+    polymarket_slug = request.args.get('polymarketSlug', DEFAULT_POLYMARKET_SLUG)
+
+    # Parse end time
+    if end_time_str:
+        try:
+            sale_end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00')).replace(tzinfo=None)
+        except:
+            sale_end_time = DEFAULT_SALE_END_TIME
+    else:
+        sale_end_time = DEFAULT_SALE_END_TIME
+
     now = datetime.utcnow()
-    time_remaining = SALE_END_TIME - now
+    time_remaining = sale_end_time - now
     hours_remaining = max(0, time_remaining.total_seconds() / 3600)
 
-    balance = get_ranger_balance()
-    tx_data = get_transaction_data()
-    polymarket_odds = get_polymarket_odds()
+    balance = get_ranger_balance(wallet)
+    tx_data = get_transaction_data(wallet)
+    polymarket_odds = get_polymarket_odds(polymarket_slug)
 
     if balance is None:
-        return jsonify({'error': 'Could not fetch balance'}), 500
+        return jsonify({'error': 'Could not fetch balance', 'wallet': wallet}), 500
 
     # Record balance for velocity tracking
     record_balance(balance)
@@ -564,7 +566,12 @@ def get_data():
         'historical_projection': round(historical_weighted, 0),
         'data_points_collected': len(balance_history),
         'confidence': confidence,
-        'historical_snapshots': historical_snapshots
+        'historical_snapshots': historical_snapshots,
+        'config': {
+            'wallet': wallet,
+            'sale_end_time': sale_end_time.isoformat(),
+            'polymarket_slug': polymarket_slug
+        }
     })
 
 @app.route('/api/historical')
